@@ -280,6 +280,24 @@ screenshotInput.addEventListener('change', (e) => {
     }
 });
 
+// Clipboard Paste (Ctrl+V)
+document.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+            e.preventDefault();
+            const file = items[i].getAsFile();
+            if (file) {
+                handleImageUpload(file);
+                showToast('Screenshot pasted! Extracting text...');
+            }
+            break;
+        }
+    }
+});
+
 // Remove image
 removeImageBtn.addEventListener('click', () => {
     previewArea.style.display = 'none';
