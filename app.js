@@ -13,6 +13,16 @@ const toneBadge = document.getElementById('toneBadge');
 const copyBtn = document.getElementById('copyBtn');
 const regenerateBtn = document.getElementById('regenerateBtn');
 
+// Screenshot Upload DOM Elements
+const screenshotInput = document.getElementById('screenshotInput');
+const uploadArea = document.getElementById('uploadArea');
+const previewArea = document.getElementById('previewArea');
+const previewImage = document.getElementById('previewImage');
+const removeImageBtn = document.getElementById('removeImage');
+const ocrProgress = document.getElementById('ocrProgress');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+
 // State
 let selectedRating = 0;
 let stars = starRatingContainer.querySelectorAll('.star');
@@ -232,3 +242,114 @@ document.addEventListener('keydown', (e) => {
         generateReply();
     }
 });
+
+// ===== Screenshot Upload & OCR Logic =====
+
+// Click to upload
+uploadArea.addEventListener('click', () => {
+    screenshotInput.click();
+});
+
+// Drag & Drop
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('drag-over');
+});
+
+uploadArea.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+        handleImageUpload(file);
+    } else {
+        showToast('Please drop an image file!', 'error');
+    }
+});
+
+// File input change
+screenshotInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        handleImageUpload(file);
+    }
+});
+
+// Remove image
+removeImageBtn.addEventListener('click', () => {
+    previewArea.style.display = 'none';
+    uploadArea.style.display = 'block';
+    ocrProgress.style.display = 'none';
+    screenshotInput.value = '';
+    previewImage.src = '';
+});
+
+// Handle image upload
+function handleImageUpload(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewImage.src = e.target.result;
+        uploadArea.style.display = 'none';
+        previewArea.style.display = 'block';
+        
+        // Start OCR
+        extractTextFromImage(e.target.result);
+    };
+    reader.readAsDataURL(file);
+}
+
+// Extract text using Tesseract.js
+async function extractTextFromImage(imageData) {
+    ocrProgress.style.display = 'block';
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Initializing OCR engine...';
+
+    try {
+        const result = await Tesseract.recognize(imageData, 'eng', {
+            logger: (m) => {
+                if (m.status === 'recognizing text') {
+                    const percent = Math.round(m.progress * 100);
+                    progressFill.style.width = percent + '%';
+                    progressText.textContent = `Extracting text... ${percent}%`;
+                } else if (m.status === 'loading language traineddata') {
+                    progressFill.style.width = '20%';
+                    progressText.textContent = 'Loading language data...';
+                } else if (m.status === 'initializing api') {
+                    progressFill.style.width = '10%';
+                    progressText.textContent = 'Initializing...';
+                }
+            }
+        });
+
+        const extractedText = result.data.text.trim();
+        
+        if (extractedText) {
+            reviewTextArea.value = extractedText;
+            progressFill.style.width = '100%';
+            progressText.textContent = '✓ Text extracted successfully!';
+            showToast('Review text extracted from screenshot! ✓');
+        } else {
+            progressText.textContent = '⚠️ No text found in image. Try a clearer screenshot.';
+            showToast('No text could be extracted. Try a clearer image.', 'error');
+        }
+
+        // Hide progress after a delay
+        setTimeout(() => {
+            ocrProgress.style.display = 'none';
+        }, 3000);
+
+    } catch (error) {
+        console.error('OCR Error:', error);
+        progressText.textContent = '❌ Error extracting text. Please try again.';
+        showToast('Error extracting text from image.', 'error');
+        
+        setTimeout(() => {
+            ocrProgress.style.display = 'none';
+        }, 3000);
+    }
+}
