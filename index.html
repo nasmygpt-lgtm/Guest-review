@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guest Review Replier</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏨 Guest Review Replier</h1>
+            <p class="subtitle">Generate professional replies to guest reviews with the perfect tone</p>
+        </header>
+
+        <main>
+            <div class="card">
+                <div class="form-group">
+                    <label for="guestName">Guest Name</label>
+                    <input type="text" id="guestName" placeholder="e.g., John Smith" />
+                </div>
+
+                <div class="form-group">
+                    <label for="reviewText">Guest Review</label>
+                    <textarea id="reviewText" rows="5" placeholder="Paste the guest's review here..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="starRating">Star Rating</label>
+                    <div class="star-rating" id="starRating">
+                        <span class="star" data-value="1">★</span>
+                        <span class="star" data-value="2">★</span>
+                        <span class="star" data-value="3">★</span>
+                        <span class="star" data-value="4">★</span>
+                        <span class="star" data-value="5">★</span>
+                    </div>
+                    <span class="rating-label" id="ratingLabel">Select a rating</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="toneSelect">Reply Tone</label>
+                    <select id="toneSelect">
+                        <option value="" disabled selected>Choose a tone...</option>
+                        <option value="professional">🎯 Professional</option>
+                        <option value="friendly">😊 Friendly & Warm</option>
+                        <option value="empathetic">💛 Empathetic & Apologetic</option>
+                        <option value="enthusiastic">🎉 Enthusiastic & Grateful</option>
+                        <option value="formal">📋 Formal & Corporate</option>
+                    </select>
+                </div>
+
+                <button id="generateBtn" class="btn-generate">
+                    ✨ Generate Reply
+                </button>
+            </div>
+
+            <div class="card result-card" id="resultCard" style="display: none;">
+                <div class="result-header">
+                    <h2>Generated Reply</h2>
+                    <div class="tone-badge" id="toneBadge"></div>
+                </div>
+                <div class="result-content" id="resultContent"></div>
+                <div class="result-actions">
+                    <button id="copyBtn" class="btn-copy">📋 Copy to Clipboard</button>
+                    <button id="regenerateBtn" class="btn-regenerate">🔄 Regenerate</button>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Guest Review Replier &mdash; Crafting the perfect response, every time.</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
