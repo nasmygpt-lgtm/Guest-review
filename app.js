@@ -119,23 +119,204 @@ const replyTemplates = {
     }
 };
 
-// ===== Sentiment Detection =====
-function detectSentiment(text, rating) {
-    if (rating >= 4) return 'positive';
-    if (rating <= 2) return 'negative';
-    if (rating === 3) return 'neutral';
+// ===== Sentiment & Content Analysis =====
 
-    // Fallback: keyword-based detection
-    const positiveWords = ['great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'perfect', 'best', 'beautiful', 'outstanding', 'clean', 'comfortable', 'friendly', 'helpful', 'recommend'];
-    const negativeWords = ['terrible', 'awful', 'horrible', 'worst', 'dirty', 'rude', 'noisy', 'broken', 'disappointed', 'unacceptable', 'never', 'poor', 'bad', 'cold', 'slow'];
+// Words that flip the sentiment of the word right after them ("not good", "wasn't clean")
+const NEGATORS = ['not', 'no', "n't", 'never', 'without', 'lack', 'lacked', 'hardly', "wasn't", "weren't", "isn't", "aren't", "didn't", "don't", "couldn't"];
 
+const POSITIVE_WORDS = [
+    'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'loved', 'perfect', 'best',
+    'beautiful', 'outstanding', 'clean', 'comfortable', 'friendly', 'helpful', 'recommend', 'lovely',
+    'awesome', 'superb', 'delicious', 'spacious', 'cozy', 'peaceful', 'welcoming', 'exceptional',
+    'pleasant', 'enjoyed', 'enjoy', 'happy', 'satisfied', 'nice', 'good', 'fabulous', 'gorgeous',
+    'spotless', 'quiet', 'relaxing', 'attentive', 'polite', 'stunning', 'impressed', 'memorable'
+];
+
+const NEGATIVE_WORDS = [
+    'terrible', 'awful', 'horrible', 'worst', 'dirty', 'rude', 'noisy', 'broken', 'disappointed',
+    'disappointing', 'unacceptable', 'poor', 'bad', 'cold', 'slow', 'smell', 'smelly', 'stain',
+    'stained', 'uncomfortable', 'unhelpful', 'unfriendly', 'overpriced', 'expensive', 'filthy',
+    'disgusting', 'mold', 'bugs', 'insects', 'leak', 'leaking', 'stinks', 'stink', 'nightmare',
+    'avoid', 'refuse', 'refused', 'ignored', 'waited', 'waiting', 'delay', 'delayed', 'unclean',
+    'outdated', 'worn', 'damaged', 'complaint', 'issue', 'problem', 'problems', 'frustrating',
+    'frustrated', 'upset', 'angry', 'ruined', 'regret', 'mediocre', 'lousy'
+];
+
+// Topics the guest may talk about — maps a natural-language label to its keywords
+const TOPICS = {
+    'the staff and service': ['staff', 'service', 'reception', 'front desk', 'manager', 'employee', 'team', 'host', 'concierge', 'waiter', 'waitress', 'server'],
+    'the cleanliness': ['clean', 'cleanliness', 'dirty', 'spotless', 'filthy', 'housekeeping', 'tidy', 'hygiene', 'dust', 'stain'],
+    'the room': ['room', 'bed', 'bathroom', 'shower', 'linen', 'towel', 'suite', 'bedroom', 'pillow', 'mattress'],
+    'the food and breakfast': ['food', 'breakfast', 'dinner', 'lunch', 'meal', 'restaurant', 'buffet', 'coffee', 'menu', 'dining', 'chef', 'delicious'],
+    'the location': ['location', 'located', 'nearby', 'beach', 'city', 'center', 'downtown', 'view', 'central', 'walk', 'walking distance'],
+    'the value for money': ['price', 'value', 'expensive', 'cheap', 'cost', 'overpriced', 'worth', 'money', 'affordable'],
+    'the noise levels': ['noise', 'noisy', 'quiet', 'loud', 'soundproof', 'sleep'],
+    'the amenities': ['pool', 'gym', 'spa', 'wifi', 'internet', 'parking', 'ac', 'air conditioning', 'facilities', 'amenities'],
+    'the check-in process': ['check-in', 'check in', 'checkout', 'check-out', 'check out', 'queue']
+};
+
+// Tokenize into lowercase words, keeping contractions
+function tokenize(text) {
+    return text.toLowerCase().match(/[a-z']+/g) || [];
+}
+
+// Analyze the review: returns { sentiment, score, positives, negatives, topics }
+function analyzeReview(text, rating) {
+    const tokens = tokenize(text);
+    let posHits = [];
+    let negHits = [];
+
+    tokens.forEach((word, i) => {
+        const prev = tokens[i - 1] || '';
+        const prev2 = tokens[i - 2] || '';
+        const negated = NEGATORS.includes(prev) || NEGATORS.includes(prev2) ||
+                        prev.endsWith("n't") || prev2.endsWith("n't");
+
+        if (POSITIVE_WORDS.includes(word)) {
+            negated ? negHits.push(word) : posHits.push(word);
+        } else if (NEGATIVE_WORDS.includes(word)) {
+            negated ? posHits.push(word) : negHits.push(word);
+        }
+    });
+
+    // Detect which topics were mentioned
     const lowerText = text.toLowerCase();
-    let positiveCount = positiveWords.filter(w => lowerText.includes(w)).length;
-    let negativeCount = negativeWords.filter(w => lowerText.includes(w)).length;
+    const topics = [];
+    for (const [label, keywords] of Object.entries(TOPICS)) {
+        if (keywords.some(k => lowerText.includes(k))) topics.push(label);
+    }
 
-    if (positiveCount > negativeCount) return 'positive';
-    if (negativeCount > positiveCount) return 'negative';
-    return 'neutral';
+    // Score primarily from text; rating is a light tie-breaker only
+    let score = posHits.length - negHits.length;
+
+    let sentiment;
+    if (score > 0) sentiment = 'positive';
+    else if (score < 0) sentiment = 'negative';
+    else {
+        // Text is balanced/empty of keywords — use rating as a hint, else neutral
+        if (rating >= 4) sentiment = 'positive';
+        else if (rating >= 1 && rating <= 2) sentiment = 'negative';
+        else sentiment = 'neutral';
+    }
+
+    // If text is clearly positive but rating is low (or vice versa), trust the TEXT
+    // (the guest's words are what we're replying to)
+    return {
+        sentiment,
+        score,
+        positives: [...new Set(posHits)],
+        negatives: [...new Set(negHits)],
+        topics
+    };
+}
+
+// ===== Smart Reply Builder =====
+// Builds a reply that references the guest's actual sentiment and topics.
+
+function pick(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Turn a list of topics into a readable phrase: ["room","food"] -> "the room and the food"
+function topicsPhrase(topics) {
+    if (!topics.length) return '';
+    const list = topics.slice(0, 3); // don't overload the sentence
+    if (list.length === 1) return list[0];
+    if (list.length === 2) return `${list[0]} and ${list[1]}`;
+    return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`;
+}
+
+// Tone-specific building blocks
+const TONE_STYLE = {
+    professional: {
+        openers: {
+            positive: ['Dear {name},\n\nThank you for taking the time to share your feedback with us.'],
+            negative: ['Dear {name},\n\nThank you for sharing your feedback, and please accept our sincere apologies.'],
+            neutral: ['Dear {name},\n\nThank you for your thoughtful review and for choosing to stay with us.']
+        },
+        closer: '\n\nWe look forward to welcoming you back.\n\nBest regards,\nThe Management Team',
+        praise: t => `We are delighted to hear that you enjoyed ${t}, and we will gladly share your kind words with our team.`,
+        concern: t => `We are genuinely sorry that ${t} did not meet the standard you rightly expected. Your comments have been shared with the relevant team for immediate review.`
+    },
+    friendly: {
+        openers: {
+            positive: ['Hi {name}! 😊\n\nThank you so much for the lovely review — it truly made our day!'],
+            negative: ['Hi {name},\n\nThank you for being honest with us — we\'re really sorry your stay wasn\'t what it should have been.'],
+            neutral: ['Hi {name}! 👋\n\nThanks a lot for sharing your experience with us!']
+        },
+        closer: '\n\nWe\'d love to see you again soon! 🌟\n\nWarmly,\nThe Team',
+        praise: t => `We\'re so happy you enjoyed ${t} — that means a lot to us! 😄`,
+        concern: t => `We\'re really sorry about ${t} — that\'s not the experience we want for you, and we\'re already working on making it right. 🙏`
+    },
+    empathetic: {
+        openers: {
+            positive: ['Dear {name},\n\nThank you so much for sharing your experience — your words truly warmed our hearts.'],
+            negative: ['Dear {name},\n\nWe want to start by saying how truly sorry we are. Reading your review, we completely understand your frustration.'],
+            neutral: ['Dear {name},\n\nThank you for taking the time to share your honest thoughts with us.']
+        },
+        closer: '\n\nWe genuinely hope to have the chance to welcome you back.\n\nWith heartfelt thanks,\nThe Team',
+        praise: t => `Knowing that you felt cared for when it came to ${t} means more to us than you might realise.`,
+        concern: t => `We are deeply sorry that ${t} let you down. You deserved better, and we take full responsibility for making this right.`
+    },
+    enthusiastic: {
+        openers: {
+            positive: ['Dear {name}! 🎉\n\nWOW — thank you SO much for this incredible review!'],
+            negative: ['Dear {name},\n\nFirst of all, THANK YOU for your honesty — we truly appreciate it, and we\'re determined to make things right! 💪'],
+            neutral: ['Hey {name}! 🙌\n\nThank you so much for your feedback — we love hearing from our guests!']
+        },
+        closer: '\n\nWe can\'t WAIT to welcome you back! ✨\n\nWith huge gratitude,\nThe Team',
+        praise: t => `We\'re absolutely thrilled that you loved ${t} — you\'ve made our whole team smile! 🌟`,
+        concern: t => `We\'re not happy that ${t} fell short, and we\'re fired up to fix it — your feedback is exactly what helps us get better! 🚀`
+    },
+    formal: {
+        openers: {
+            positive: ['Dear Mr./Ms. {name},\n\nWe wish to extend our sincere gratitude for your commendable review.'],
+            negative: ['Dear Mr./Ms. {name},\n\nWe acknowledge your feedback with sincere regret and offer our formal apologies.'],
+            neutral: ['Dear Mr./Ms. {name},\n\nWe acknowledge with appreciation your review of our establishment.']
+        },
+        closer: '\n\nWe remain at your disposal and hope to have the privilege of hosting you again.\n\nYours faithfully,\nGeneral Manager\nGuest Relations Department',
+        praise: t => `We are pleased to note your satisfaction with ${t}, which reflects our team\'s commitment to excellence.`,
+        concern: t => `We regret that ${t} did not meet our established standards. The matter has been escalated to the relevant department for corrective action.`
+    }
+};
+
+function buildSmartReply(name, tone, analysis) {
+    const style = TONE_STYLE[tone];
+    const { sentiment, positives, negatives, topics } = analysis;
+
+    let parts = [];
+
+    // Opener based on the REAL sentiment of the message
+    parts.push(pick(style.openers[sentiment]));
+
+    // Body — reference what the guest actually talked about
+    const topicText = topicsPhrase(topics);
+
+    if (sentiment === 'positive') {
+        parts.push(style.praise(topicText || 'your stay with us'));
+    } else if (sentiment === 'negative') {
+        parts.push(style.concern(topicText || 'aspects of your stay'));
+    } else {
+        // Neutral / mixed — acknowledge both sides if present
+        if (positives.length && negatives.length) {
+            parts.push(style.praise(topicText || 'several parts of your stay'));
+            parts.push(style.concern('the areas that fell short'));
+        } else if (positives.length) {
+            parts.push(style.praise(topicText || 'your stay'));
+        } else if (negatives.length) {
+            parts.push(style.concern(topicText || 'the concerns you raised'));
+        } else {
+            parts.push(style.praise('your stay with us'));
+        }
+    }
+
+    // Closer
+    parts.push(style.closer);
+
+    let reply = parts.join('\n\n').replace(/{name}/g, name);
+    // Clean up doubled newlines around the closer
+    reply = reply.replace(/\n\n\n+/g, '\n\n');
+    return reply;
 }
 
 // ===== Generate Reply =====
@@ -159,22 +340,17 @@ function generateReply() {
         return;
     }
 
-    // Detect sentiment
-    const sentiment = detectSentiment(reviewText, selectedRating);
+    // Analyze what the guest actually said
+    const analysis = analyzeReview(reviewText, selectedRating);
 
-    // Get templates for chosen tone and sentiment
-    const templates = replyTemplates[tone][sentiment];
-    const randomIndex = Math.floor(Math.random() * templates.length);
-    let reply = templates[randomIndex];
-
-    // Replace placeholders
-    reply = reply.replace(/{name}/g, name);
+    // Build a reply that references the guest's actual content
+    let reply = buildSmartReply(name, tone, analysis);
 
     // Display result
     resultContent.textContent = reply;
     resultCard.style.display = 'block';
 
-    // Set tone badge
+    // Set tone badge (with sentiment)
     const toneLabels = {
         professional: 'Professional',
         friendly: 'Friendly',
@@ -182,7 +358,8 @@ function generateReply() {
         enthusiastic: 'Enthusiastic',
         formal: 'Formal'
     };
-    toneBadge.textContent = toneLabels[tone];
+    const sentimentLabel = analysis.sentiment.charAt(0).toUpperCase() + analysis.sentiment.slice(1);
+    toneBadge.textContent = `${toneLabels[tone]} · ${sentimentLabel}`;
     toneBadge.className = `tone-badge ${tone}`;
 
     // Scroll to result
