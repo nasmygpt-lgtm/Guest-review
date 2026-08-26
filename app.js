@@ -122,24 +122,48 @@ const replyTemplates = {
 // ===== Sentiment & Content Analysis =====
 
 // Words that flip the sentiment of the word right after them ("not good", "wasn't clean")
-const NEGATORS = ['not', 'no', "n't", 'never', 'without', 'lack', 'lacked', 'hardly', "wasn't", "weren't", "isn't", "aren't", "didn't", "don't", "couldn't"];
+const NEGATORS = ['not', 'no', "n't", 'never', 'without', 'lack', 'lacked', 'hardly', "wasn't", "weren't", "isn't", "aren't", "didn't", "don't", "couldn't", "wouldn't"];
 
 const POSITIVE_WORDS = [
     'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'loved', 'perfect', 'best',
-    'beautiful', 'outstanding', 'clean', 'comfortable', 'friendly', 'helpful', 'recommend', 'lovely',
+    'beautiful', 'outstanding', 'comfortable', 'friendly', 'helpful', 'recommend', 'lovely',
     'awesome', 'superb', 'delicious', 'spacious', 'cozy', 'peaceful', 'welcoming', 'exceptional',
     'pleasant', 'enjoyed', 'enjoy', 'happy', 'satisfied', 'nice', 'good', 'fabulous', 'gorgeous',
-    'spotless', 'quiet', 'relaxing', 'attentive', 'polite', 'stunning', 'impressed', 'memorable'
+    'spotless', 'quiet', 'relaxing', 'attentive', 'polite', 'stunning', 'impressed', 'memorable',
+    'clean'
 ];
 
 const NEGATIVE_WORDS = [
     'terrible', 'awful', 'horrible', 'worst', 'dirty', 'rude', 'noisy', 'broken', 'disappointed',
-    'disappointing', 'unacceptable', 'poor', 'bad', 'cold', 'slow', 'smell', 'smelly', 'stain',
-    'stained', 'uncomfortable', 'unhelpful', 'unfriendly', 'overpriced', 'expensive', 'filthy',
-    'disgusting', 'mold', 'bugs', 'insects', 'leak', 'leaking', 'stinks', 'stink', 'nightmare',
-    'avoid', 'refuse', 'refused', 'ignored', 'waited', 'waiting', 'delay', 'delayed', 'unclean',
-    'outdated', 'worn', 'damaged', 'complaint', 'issue', 'problem', 'problems', 'frustrating',
-    'frustrated', 'upset', 'angry', 'ruined', 'regret', 'mediocre', 'lousy'
+    'disappointing', 'unacceptable', 'poor', 'poorer', 'bad', 'worse', 'worsening', 'cold', 'slow',
+    'smell', 'smelly', 'stain', 'stained', 'uncomfortable', 'unhelpful', 'unfriendly', 'overpriced',
+    'expensive', 'filthy', 'disgusting', 'mold', 'bugs', 'insects', 'leak', 'leaking', 'stinks',
+    'stink', 'nightmare', 'avoid', 'refuse', 'refused', 'ignored', 'waited', 'waiting', 'delay',
+    'delayed', 'unclean', 'outdated', 'worn', 'damaged', 'complaint', 'issue', 'problem', 'problems',
+    'frustrating', 'frustrated', 'upset', 'angry', 'ruined', 'regret', 'mediocre', 'lousy',
+    'declining', 'deteriorating'
+];
+
+// Multi-word phrases that signal a COMPLAINT or a request for improvement,
+// even when no single negative word is present.
+// e.g. "can be kept more clean", "could be better", "getting poorer", "needs improvement"
+const NEGATIVE_PHRASES = [
+    'can be kept', 'could be kept', 'should be kept', 'can be improved', 'could be improved',
+    'needs improvement', 'need improvement', 'needs to improve', 'room for improvement',
+    'could be better', 'can be better', 'should be better', 'could do better', 'can do better',
+    'getting poorer', 'getting worse', 'getting bad', 'get worse', 'gone downhill', 'going downhill',
+    'went downhill', 'not what it used to be', 'not as good', 'used to be better', 'less than',
+    'fell short', 'falls short', 'below expectations', 'not up to', 'not too impressed',
+    'more clean', 'cleaner', 'not clean enough', 'wish it was', 'wish it were', 'expected more',
+    'let down', 'let us down', 'not great', 'nothing special', 'wouldn\'t recommend',
+    'would not recommend', 'not worth', 'too expensive', 'overpriced'
+];
+
+// Phrases that are clearly POSITIVE praise.
+const POSITIVE_PHRASES = [
+    'highly recommend', 'would recommend', 'will be back', 'come back', 'exceeded expectations',
+    'above and beyond', 'can\'t fault', 'no complaints', 'well worth', 'value for money',
+    'better than expected', 'lovely time', 'great time', 'wonderful time', 'thoroughly enjoyed'
 ];
 
 // Topics the guest may talk about — maps a natural-language label to its keywords
@@ -160,12 +184,17 @@ function tokenize(text) {
     return text.toLowerCase().match(/[a-z']+/g) || [];
 }
 
-// Analyze the review: returns { sentiment, score, positives, negatives, topics }
-function analyzeReview(text, rating) {
-    const tokens = tokenize(text);
-    let posHits = [];
-    let negHits = [];
+// Score a single clause of text: returns net sentiment score for that clause.
+function scoreClause(clause) {
+    const lower = clause.toLowerCase();
+    let score = 0;
 
+    // Phrase-level signals first (strong)
+    NEGATIVE_PHRASES.forEach(p => { if (lower.includes(p)) score -= 2; });
+    POSITIVE_PHRASES.forEach(p => { if (lower.includes(p)) score += 2; });
+
+    // Word-level signals with negation handling
+    const tokens = tokenize(clause);
     tokens.forEach((word, i) => {
         const prev = tokens[i - 1] || '';
         const prev2 = tokens[i - 2] || '';
@@ -173,40 +202,74 @@ function analyzeReview(text, rating) {
                         prev.endsWith("n't") || prev2.endsWith("n't");
 
         if (POSITIVE_WORDS.includes(word)) {
-            negated ? negHits.push(word) : posHits.push(word);
+            score += negated ? -1 : 1;
         } else if (NEGATIVE_WORDS.includes(word)) {
-            negated ? posHits.push(word) : negHits.push(word);
+            score += negated ? 1 : -1;
         }
     });
 
-    // Detect which topics were mentioned
-    const lowerText = text.toLowerCase();
-    const topics = [];
+    return score;
+}
+
+// Split text into clauses on sentence and conjunction boundaries so we can
+// judge each part ("location was great BUT room was dirty") separately.
+function splitClauses(text) {
+    return text
+        .split(/[.!?\n]+|,\s*(?:but|however|although|though|yet|while)\b|\b(?:but|however|although|though|yet|while)\b/i)
+        .map(c => c.trim())
+        .filter(Boolean);
+}
+
+// Which topics does this clause mention?
+function topicsInClause(clause) {
+    const lower = clause.toLowerCase();
+    const found = [];
     for (const [label, keywords] of Object.entries(TOPICS)) {
-        if (keywords.some(k => lowerText.includes(k))) topics.push(label);
+        if (keywords.some(k => lower.includes(k))) found.push(label);
     }
+    return found;
+}
 
-    // Score primarily from text; rating is a light tie-breaker only
-    let score = posHits.length - negHits.length;
+// Analyze the review with per-clause, per-topic sentiment.
+// Returns { sentiment, score, praisedTopics, criticizedTopics }
+function analyzeReview(text, rating) {
+    const clauses = splitClauses(text);
+    let totalScore = 0;
+    const praisedTopics = new Set();
+    const criticizedTopics = new Set();
 
+    clauses.forEach(clause => {
+        const s = scoreClause(clause);
+        totalScore += s;
+        const topics = topicsInClause(clause);
+        if (s > 0) topics.forEach(t => praisedTopics.add(t));
+        else if (s < 0) topics.forEach(t => criticizedTopics.add(t));
+    });
+
+    // A topic mentioned in both a good and bad clause is treated as criticized
+    // (a complaint should never be answered as praise).
+    criticizedTopics.forEach(t => praisedTopics.delete(t));
+
+    // Overall sentiment: driven by the text. Rating only breaks a true tie.
     let sentiment;
-    if (score > 0) sentiment = 'positive';
-    else if (score < 0) sentiment = 'negative';
-    else {
-        // Text is balanced/empty of keywords — use rating as a hint, else neutral
-        if (rating >= 4) sentiment = 'positive';
-        else if (rating >= 1 && rating <= 2) sentiment = 'negative';
+    if (totalScore > 0 && criticizedTopics.size === 0) sentiment = 'positive';
+    else if (totalScore < 0 && praisedTopics.size === 0) sentiment = 'negative';
+    else if (totalScore === 0) {
+        if (praisedTopics.size && criticizedTopics.size) sentiment = 'mixed';
+        else if (rating && rating >= 4) sentiment = 'positive';
+        else if (rating && rating <= 2) sentiment = 'negative';
         else sentiment = 'neutral';
+    } else {
+        // Has both praise and criticism → mixed
+        sentiment = (praisedTopics.size && criticizedTopics.size) ? 'mixed'
+                  : (totalScore > 0 ? 'positive' : 'negative');
     }
 
-    // If text is clearly positive but rating is low (or vice versa), trust the TEXT
-    // (the guest's words are what we're replying to)
     return {
         sentiment,
-        score,
-        positives: [...new Set(posHits)],
-        negatives: [...new Set(negHits)],
-        topics
+        score: totalScore,
+        praisedTopics: [...praisedTopics],
+        criticizedTopics: [...criticizedTopics]
     };
 }
 
@@ -403,33 +466,35 @@ const TONE_STYLE = {
 
 function buildSmartReply(name, tone, analysis) {
     const style = TONE_STYLE[tone];
-    const { sentiment, positives, negatives, topics } = analysis;
+    const { sentiment, praisedTopics, criticizedTopics } = analysis;
 
     // Each part is picked randomly from a pool, so Regenerate gives a fresh reply.
     const praise = (t) => pick(style.praise)(t);
     const concern = (t) => pick(style.concern)(t);
 
+    const praisePhrase = topicsPhrase(praisedTopics);
+    const concernPhrase = topicsPhrase(criticizedTopics);
+
     let parts = [];
 
-    // Opener based on the REAL sentiment of the message
-    parts.push(pick(style.openers[sentiment]));
-
-    // Body — reference what the guest actually talked about
-    const topicText = topicsPhrase(topics);
-
     if (sentiment === 'positive') {
-        parts.push(praise(topicText || 'your stay with us'));
+        parts.push(pick(style.openers.positive));
+        parts.push(praise(praisePhrase || 'your stay with us'));
     } else if (sentiment === 'negative') {
-        parts.push(concern(topicText || 'aspects of your stay'));
+        parts.push(pick(style.openers.negative));
+        parts.push(concern(concernPhrase || 'aspects of your stay'));
+    } else if (sentiment === 'mixed') {
+        // Acknowledge the good first, then sincerely address the concerns.
+        parts.push(pick(style.openers.neutral));
+        if (praisePhrase) parts.push(praise(praisePhrase));
+        parts.push(concern(concernPhrase || 'the areas you mentioned'));
     } else {
-        // Neutral / mixed — acknowledge both sides if present
-        if (positives.length && negatives.length) {
-            parts.push(praise(topicText || 'several parts of your stay'));
-            parts.push(concern('the areas that fell short'));
-        } else if (positives.length) {
-            parts.push(praise(topicText || 'your stay'));
-        } else if (negatives.length) {
-            parts.push(concern(topicText || 'the concerns you raised'));
+        // Neutral — no strong signal either way
+        parts.push(pick(style.openers.neutral));
+        if (criticizedTopics.length) {
+            parts.push(concern(concernPhrase));
+        } else if (praisedTopics.length) {
+            parts.push(praise(praisePhrase));
         } else {
             parts.push(praise('your stay with us'));
         }
@@ -439,7 +504,6 @@ function buildSmartReply(name, tone, analysis) {
     parts.push(pick(style.closers));
 
     let reply = parts.join('\n\n').replace(/{name}/g, name);
-    // Clean up doubled newlines around the closer
     reply = reply.replace(/\n\n\n+/g, '\n\n');
     return reply;
 }
@@ -490,7 +554,13 @@ function generateReply() {
         enthusiastic: 'Enthusiastic',
         formal: 'Formal'
     };
-    const sentimentLabel = analysis.sentiment.charAt(0).toUpperCase() + analysis.sentiment.slice(1);
+    const sentimentLabels = {
+        positive: 'Positive',
+        negative: 'Negative',
+        mixed: 'Mixed',
+        neutral: 'Neutral'
+    };
+    const sentimentLabel = sentimentLabels[analysis.sentiment] || 'Neutral';
     toneBadge.textContent = `${toneLabels[tone]} · ${sentimentLabel}`;
     toneBadge.className = `tone-badge ${tone}`;
 
