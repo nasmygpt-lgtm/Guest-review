@@ -226,63 +226,188 @@ function topicsPhrase(topics) {
     return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`;
 }
 
-// Tone-specific building blocks
+// Tone-specific building blocks. Each part has multiple variations so
+// "Regenerate" produces a genuinely different (but still accurate) reply.
 const TONE_STYLE = {
     professional: {
         openers: {
-            positive: ['Dear {name},\n\nThank you for taking the time to share your feedback with us.'],
-            negative: ['Dear {name},\n\nThank you for sharing your feedback, and please accept our sincere apologies.'],
-            neutral: ['Dear {name},\n\nThank you for your thoughtful review and for choosing to stay with us.']
+            positive: [
+                'Dear {name},\n\nThank you for taking the time to share your feedback with us.',
+                'Dear {name},\n\nWe sincerely appreciate your kind review and are grateful you chose to stay with us.',
+                'Dear {name},\n\nThank you for your wonderful feedback — it is greatly valued by our entire team.'
+            ],
+            negative: [
+                'Dear {name},\n\nThank you for sharing your feedback, and please accept our sincere apologies.',
+                'Dear {name},\n\nWe appreciate you bringing these concerns to our attention, and we are sorry to hear of them.',
+                'Dear {name},\n\nThank you for your honest review. We regret that your experience fell short of our standards.'
+            ],
+            neutral: [
+                'Dear {name},\n\nThank you for your thoughtful review and for choosing to stay with us.',
+                'Dear {name},\n\nWe appreciate you taking the time to share your balanced feedback with us.',
+                'Dear {name},\n\nThank you for your review — your insights help us continue to improve.'
+            ]
         },
-        closer: '\n\nWe look forward to welcoming you back.\n\nBest regards,\nThe Management Team',
-        praise: t => `We are delighted to hear that you enjoyed ${t}, and we will gladly share your kind words with our team.`,
-        concern: t => `We are genuinely sorry that ${t} did not meet the standard you rightly expected. Your comments have been shared with the relevant team for immediate review.`
+        closers: [
+            '\n\nWe look forward to welcoming you back.\n\nBest regards,\nThe Management Team',
+            '\n\nWe hope to have the opportunity to host you again soon.\n\nWarm regards,\nThe Management Team',
+            '\n\nThank you again for your feedback.\n\nSincerely,\nThe Management Team'
+        ],
+        praise: [
+            t => `We are delighted to hear that you enjoyed ${t}, and we will gladly share your kind words with our team.`,
+            t => `It is wonderful to know that ${t} met your expectations — our team takes great pride in this.`,
+            t => `We are pleased that ${t} contributed to a positive experience during your stay.`
+        ],
+        concern: [
+            t => `We are genuinely sorry that ${t} did not meet the standard you rightly expected. Your comments have been shared with the relevant team for immediate review.`,
+            t => `Please accept our apologies regarding ${t}. We have noted your feedback and are taking steps to address it.`,
+            t => `We regret that ${t} caused disappointment. Rest assured, this has been escalated for prompt corrective action.`
+        ]
     },
     friendly: {
         openers: {
-            positive: ['Hi {name}! 😊\n\nThank you so much for the lovely review — it truly made our day!'],
-            negative: ['Hi {name},\n\nThank you for being honest with us — we\'re really sorry your stay wasn\'t what it should have been.'],
-            neutral: ['Hi {name}! 👋\n\nThanks a lot for sharing your experience with us!']
+            positive: [
+                'Hi {name}! 😊\n\nThank you so much for the lovely review — it truly made our day!',
+                'Hey {name}! 👋\n\nWow, thank you for such kind words — we\'re so glad you had a great time!',
+                'Hi {name}! 🌟\n\nThank you for the wonderful feedback — you\'ve put a big smile on our faces!'
+            ],
+            negative: [
+                'Hi {name},\n\nThank you for being honest with us — we\'re really sorry your stay wasn\'t what it should have been.',
+                'Hey {name},\n\nWe really appreciate your feedback, and we\'re sorry things didn\'t go smoothly for you.',
+                'Hi {name},\n\nThanks for letting us know — we\'re genuinely sorry your experience wasn\'t up to par.'
+            ],
+            neutral: [
+                'Hi {name}! 👋\n\nThanks a lot for sharing your experience with us!',
+                'Hey {name}! 😊\n\nThank you for taking the time to leave us your thoughts!',
+                'Hi {name}!\n\nWe really appreciate you sharing your honest feedback with us!'
+            ]
         },
-        closer: '\n\nWe\'d love to see you again soon! 🌟\n\nWarmly,\nThe Team',
-        praise: t => `We\'re so happy you enjoyed ${t} — that means a lot to us! 😄`,
-        concern: t => `We\'re really sorry about ${t} — that\'s not the experience we want for you, and we\'re already working on making it right. 🙏`
+        closers: [
+            '\n\nWe\'d love to see you again soon! 🌟\n\nWarmly,\nThe Team',
+            '\n\nCan\'t wait to welcome you back! 😄\n\nCheers,\nThe Team',
+            '\n\nHope to see you again really soon! 🙌\n\nWarm wishes,\nThe Team'
+        ],
+        praise: [
+            t => `We\'re so happy you enjoyed ${t} — that means a lot to us! 😄`,
+            t => `It\'s awesome to hear you loved ${t} — our team will be thrilled! 🎉`,
+            t => `We\'re over the moon that ${t} made your stay special! 🌟`
+        ],
+        concern: [
+            t => `We\'re really sorry about ${t} — that\'s not the experience we want for you, and we\'re already working on making it right. 🙏`,
+            t => `We hate to hear that ${t} let you down — we\'re on it and making changes! 💪`,
+            t => `So sorry that ${t} wasn\'t great — thanks for flagging it, we\'ll do better! 🙏`
+        ]
     },
     empathetic: {
         openers: {
-            positive: ['Dear {name},\n\nThank you so much for sharing your experience — your words truly warmed our hearts.'],
-            negative: ['Dear {name},\n\nWe want to start by saying how truly sorry we are. Reading your review, we completely understand your frustration.'],
-            neutral: ['Dear {name},\n\nThank you for taking the time to share your honest thoughts with us.']
+            positive: [
+                'Dear {name},\n\nThank you so much for sharing your experience — your words truly warmed our hearts.',
+                'Dear {name},\n\nYour lovely review means so much to us — thank you for taking the time to share it.',
+                'Dear {name},\n\nWe were genuinely touched to read your kind words — thank you from all of us.'
+            ],
+            negative: [
+                'Dear {name},\n\nWe want to start by saying how truly sorry we are. Reading your review, we completely understand your frustration.',
+                'Dear {name},\n\nPlease accept our heartfelt apologies. We can only imagine how disappointing this must have been.',
+                'Dear {name},\n\nWe are deeply sorry to read about your experience — you trusted us, and we let you down.'
+            ],
+            neutral: [
+                'Dear {name},\n\nThank you for taking the time to share your honest thoughts with us.',
+                'Dear {name},\n\nWe truly appreciate your openness in sharing both the highs and lows of your stay.',
+                'Dear {name},\n\nThank you for your thoughtful feedback — we hear you, and we value every word.'
+            ]
         },
-        closer: '\n\nWe genuinely hope to have the chance to welcome you back.\n\nWith heartfelt thanks,\nThe Team',
-        praise: t => `Knowing that you felt cared for when it came to ${t} means more to us than you might realise.`,
-        concern: t => `We are deeply sorry that ${t} let you down. You deserved better, and we take full responsibility for making this right.`
+        closers: [
+            '\n\nWe genuinely hope to have the chance to welcome you back.\n\nWith heartfelt thanks,\nThe Team',
+            '\n\nWe would be honoured to welcome you again and show you our very best.\n\nWith warm regards,\nThe Team',
+            '\n\nThank you for allowing us to be part of your journey.\n\nWith gratitude,\nThe Team'
+        ],
+        praise: [
+            t => `Knowing that you felt cared for when it came to ${t} means more to us than you might realise.`,
+            t => `It fills us with joy to know that ${t} made you feel truly at home.`,
+            t => `Your kind words about ${t} remind our team exactly why we love what we do.`
+        ],
+        concern: [
+            t => `We are deeply sorry that ${t} let you down. You deserved better, and we take full responsibility for making this right.`,
+            t => `It genuinely pains us that ${t} caused you frustration. Please know we are committed to doing better.`,
+            t => `We understand how much ${t} affected your stay, and we are truly sorry. Your feelings are completely valid.`
+        ]
     },
     enthusiastic: {
         openers: {
-            positive: ['Dear {name}! 🎉\n\nWOW — thank you SO much for this incredible review!'],
-            negative: ['Dear {name},\n\nFirst of all, THANK YOU for your honesty — we truly appreciate it, and we\'re determined to make things right! 💪'],
-            neutral: ['Hey {name}! 🙌\n\nThank you so much for your feedback — we love hearing from our guests!']
+            positive: [
+                'Dear {name}! 🎉\n\nWOW — thank you SO much for this incredible review!',
+                '{name}!! 🌟\n\nThis review just made our entire week — THANK YOU!',
+                'Hi {name}! 🎊\n\nWe are absolutely thrilled — thank you for these amazing words!'
+            ],
+            negative: [
+                'Dear {name},\n\nFirst of all, THANK YOU for your honesty — we truly appreciate it, and we\'re determined to make things right! 💪',
+                'Hi {name},\n\nThank you for keeping it real with us — we\'re fired up to turn this around! 🙏',
+                'Dear {name},\n\nWe really appreciate your feedback — and we\'re on a mission to make your next visit amazing! 🚀'
+            ],
+            neutral: [
+                'Hey {name}! 🙌\n\nThank you so much for your feedback — we love hearing from our guests!',
+                'Hi {name}! ✨\n\nThanks a million for sharing your experience with us!',
+                '{name}! 🎉\n\nWe really appreciate you taking the time to tell us how it went!'
+            ]
         },
-        closer: '\n\nWe can\'t WAIT to welcome you back! ✨\n\nWith huge gratitude,\nThe Team',
-        praise: t => `We\'re absolutely thrilled that you loved ${t} — you\'ve made our whole team smile! 🌟`,
-        concern: t => `We\'re not happy that ${t} fell short, and we\'re fired up to fix it — your feedback is exactly what helps us get better! 🚀`
+        closers: [
+            '\n\nWe can\'t WAIT to welcome you back! ✨\n\nWith huge gratitude,\nThe Team',
+            '\n\nNext time is going to be even MORE amazing — promise! 🌟\n\nWith so much gratitude,\nThe Team',
+            '\n\nWe\'re already excited for your next visit! 🎊\n\nCheers,\nThe Team'
+        ],
+        praise: [
+            t => `We\'re absolutely thrilled that you loved ${t} — you\'ve made our whole team smile! 🌟`,
+            t => `YES! Hearing that ${t} was a highlight makes us do a happy dance! 💃`,
+            t => `It makes us SO happy that ${t} was everything you hoped for! 🎉`
+        ],
+        concern: [
+            t => `We\'re not happy that ${t} fell short, and we\'re fired up to fix it — your feedback is exactly what helps us get better! 🚀`,
+            t => `We\'re determined to make ${t} right — your input is rocket fuel for our improvements! 💪`,
+            t => `We won\'t rest until ${t} is exactly where it should be — thank you for pushing us to be better! ⭐`
+        ]
     },
     formal: {
         openers: {
-            positive: ['Dear Mr./Ms. {name},\n\nWe wish to extend our sincere gratitude for your commendable review.'],
-            negative: ['Dear Mr./Ms. {name},\n\nWe acknowledge your feedback with sincere regret and offer our formal apologies.'],
-            neutral: ['Dear Mr./Ms. {name},\n\nWe acknowledge with appreciation your review of our establishment.']
+            positive: [
+                'Dear Mr./Ms. {name},\n\nWe wish to extend our sincere gratitude for your commendable review.',
+                'Dear Mr./Ms. {name},\n\nWe acknowledge your positive review with profound appreciation.',
+                'Dear Mr./Ms. {name},\n\nIt is with great pleasure that we receive your favourable feedback.'
+            ],
+            negative: [
+                'Dear Mr./Ms. {name},\n\nWe acknowledge your feedback with sincere regret and offer our formal apologies.',
+                'Dear Mr./Ms. {name},\n\nWe have received your review and wish to express our regret regarding the matters noted.',
+                'Dear Mr./Ms. {name},\n\nWe formally acknowledge your concerns and extend our apologies for the shortcomings experienced.'
+            ],
+            neutral: [
+                'Dear Mr./Ms. {name},\n\nWe acknowledge with appreciation your review of our establishment.',
+                'Dear Mr./Ms. {name},\n\nWe have duly received your balanced assessment and thank you for it.',
+                'Dear Mr./Ms. {name},\n\nWe acknowledge receipt of your review and value your considered feedback.'
+            ]
         },
-        closer: '\n\nWe remain at your disposal and hope to have the privilege of hosting you again.\n\nYours faithfully,\nGeneral Manager\nGuest Relations Department',
-        praise: t => `We are pleased to note your satisfaction with ${t}, which reflects our team\'s commitment to excellence.`,
-        concern: t => `We regret that ${t} did not meet our established standards. The matter has been escalated to the relevant department for corrective action.`
+        closers: [
+            '\n\nWe remain at your disposal and hope to have the privilege of hosting you again.\n\nYours faithfully,\nGeneral Manager\nGuest Relations Department',
+            '\n\nWe trust you will consider returning, and we assure you of our continued commitment to excellence.\n\nRespectfully yours,\nGeneral Manager\nGuest Relations Department',
+            '\n\nShould you require any further assistance, please do not hesitate to contact us directly.\n\nYours faithfully,\nGeneral Manager\nGuest Relations Department'
+        ],
+        praise: [
+            t => `We are pleased to note your satisfaction with ${t}, which reflects our team\'s commitment to excellence.`,
+            t => `Your commendation of ${t} is duly noted and serves as a testament to our operational standards.`,
+            t => `We are gratified that ${t} met your expectations during your stay.`
+        ],
+        concern: [
+            t => `We regret that ${t} did not meet our established standards. The matter has been escalated to the relevant department for corrective action.`,
+            t => `We acknowledge the deficiencies concerning ${t} and have formally documented them for immediate remediation.`,
+            t => `Please be assured that the issues regarding ${t} have been recorded and assigned for thorough review.`
+        ]
     }
 };
 
 function buildSmartReply(name, tone, analysis) {
     const style = TONE_STYLE[tone];
     const { sentiment, positives, negatives, topics } = analysis;
+
+    // Each part is picked randomly from a pool, so Regenerate gives a fresh reply.
+    const praise = (t) => pick(style.praise)(t);
+    const concern = (t) => pick(style.concern)(t);
 
     let parts = [];
 
@@ -293,25 +418,25 @@ function buildSmartReply(name, tone, analysis) {
     const topicText = topicsPhrase(topics);
 
     if (sentiment === 'positive') {
-        parts.push(style.praise(topicText || 'your stay with us'));
+        parts.push(praise(topicText || 'your stay with us'));
     } else if (sentiment === 'negative') {
-        parts.push(style.concern(topicText || 'aspects of your stay'));
+        parts.push(concern(topicText || 'aspects of your stay'));
     } else {
         // Neutral / mixed — acknowledge both sides if present
         if (positives.length && negatives.length) {
-            parts.push(style.praise(topicText || 'several parts of your stay'));
-            parts.push(style.concern('the areas that fell short'));
+            parts.push(praise(topicText || 'several parts of your stay'));
+            parts.push(concern('the areas that fell short'));
         } else if (positives.length) {
-            parts.push(style.praise(topicText || 'your stay'));
+            parts.push(praise(topicText || 'your stay'));
         } else if (negatives.length) {
-            parts.push(style.concern(topicText || 'the concerns you raised'));
+            parts.push(concern(topicText || 'the concerns you raised'));
         } else {
-            parts.push(style.praise('your stay with us'));
+            parts.push(praise('your stay with us'));
         }
     }
 
     // Closer
-    parts.push(style.closer);
+    parts.push(pick(style.closers));
 
     let reply = parts.join('\n\n').replace(/{name}/g, name);
     // Clean up doubled newlines around the closer
