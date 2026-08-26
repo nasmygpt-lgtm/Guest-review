@@ -468,8 +468,15 @@ function generateReply() {
     // Analyze what the guest actually said
     const analysis = analyzeReview(reviewText, selectedRating);
 
-    // Build a reply that references the guest's actual content
+    // Build a reply that references the guest's actual content.
+    // Retry a few times so regenerate never shows the exact same text twice.
+    const previous = resultContent.textContent;
     let reply = buildSmartReply(name, tone, analysis);
+    let attempts = 0;
+    while (reply === previous && attempts < 8) {
+        reply = buildSmartReply(name, tone, analysis);
+        attempts++;
+    }
 
     // Display result
     resultContent.textContent = reply;
@@ -529,7 +536,13 @@ function copyToClipboard() {
 // ===== Event Listeners =====
 generateBtn.addEventListener('click', generateReply);
 copyBtn.addEventListener('click', copyToClipboard);
-regenerateBtn.addEventListener('click', generateReply);
+regenerateBtn.addEventListener('click', () => {
+    generateReply();
+    // Visible confirmation that regenerate fired
+    regenerateBtn.textContent = '🔄 Regenerating...';
+    setTimeout(() => { regenerateBtn.textContent = '🔄 Regenerate'; }, 500);
+    showToast('New reply generated! 🔄');
+});
 
 // Keyboard shortcut: Enter in guest name focuses review
 guestNameInput.addEventListener('keypress', (e) => {
